@@ -2,12 +2,13 @@ import operator
 from uuid import uuid4
 from math import ceil
 from collections import OrderedDict
+from functools import reduce
 
 import numpy as np
 import pandas as pd
 import pygdf as gd
 from libgdf_cffi import libgdf
-from toolz import merge, partition_all
+from toolz import merge, partition_all, merge_with
 
 import dask.dataframe as dd
 from dask.base import tokenize, normalize_token, DaskMethodsMixin
@@ -23,9 +24,8 @@ from dask.delayed import delayed
 from dask import compute
 
 from .utils import make_meta, check_meta
-from . import batcher_sortnet
+from . import batcher_sortnet, join_impl
 from .accessor import DatetimeAccessor
-
 
 def optimize(dsk, keys, **kwargs):
     flatkeys = list(flatten(keys)) if isinstance(keys, list) else [keys]
@@ -384,6 +384,22 @@ class DataFrame(_Frame):
         from .groupby import Groupby
 
         return Groupby(df=self, by=by, method=method)
+
+    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y'):
+        """Merging two dataframes on the column(s) indicated in *on*.
+        """
+        assert how == 'left', 'left join is impelemented'
+        if on is None:
+            return self.join(other, how=how, lsuffix=lsuffix, rsuffix=rsuffix)
+        else:
+            return join_impl.join_frames(
+                left=self,
+                right=other,
+                on=on,
+                how=how,
+                lsuffix=lsuffix,
+                rsuffix=rsuffix,
+                )
 
     def join(self, other, how='left', lsuffix='', rsuffix=''):
         """Join two datatframes
@@ -1292,3 +1308,4 @@ def reduction(args, chunk=None, aggregate=None, combine=None,
             dsk.update(arg.dask)
 
     return new_dd_object(dsk, b, meta, (None, None))
+
